@@ -14,17 +14,6 @@ pub trait CliWriterRepository {
     fn clear_current_line(&mut self);
 
     fn print_lines<T: Display>(&mut self, lines: impl IntoIterator<Item = T>);
-    fn print_lines_styled(&mut self, lines: impl IntoIterator<Item = Vec<StyledString>>);
-
-    fn print_animation_single_line_styled<
-        Sprites: IntoIterator<Item = Vec<StyledString>> + Sized + Clone,
-    >(
-        &mut self,
-        sprites: Sprites,
-        interval: Duration,
-        finisher: oneshot::Receiver<()>,
-    ) where
-        <Sprites as IntoIterator>::IntoIter: Clone;
 
     fn print_animation_single_line<T: Display, Sprites: IntoIterator<Item = T> + Sized + Clone>(
         &mut self,
@@ -33,6 +22,26 @@ pub trait CliWriterRepository {
         finisher: oneshot::Receiver<()>,
     ) where
         <Sprites as IntoIterator>::IntoIter: Clone;
+
+    fn print_centered_text_with_border(&mut self, text: &str, border_char: char);
+
+    // fn print_lines_styled<'a>(&mut self, lines: impl IntoIterator<Item = Vec<StyledString<'a>>>);
+
+    fn print_lines_styled<'a, StyledValues>(
+        &mut self,
+        lines: impl IntoIterator<Item = StyledValues>,
+    ) where
+        StyledValues: IntoIterator<Item = StyledString<'a>>;
+
+    // fn print_animation_single_line_styled<
+    //     Sprites: IntoIterator<Item = Vec<StyledString<'static>>> + Sized + Clone,
+    // >(
+    //     &mut self,
+    //     sprites: Sprites,
+    //     interval: Duration,
+    //     finisher: oneshot::Receiver<()>,
+    // ) where
+    //     <Sprites as IntoIterator>::IntoIter: Clone;
 }
 
 pub struct CrosstermCliWriter {
@@ -56,7 +65,12 @@ impl CliWriterRepository for CrosstermCliWriter {
         self.stdout.flush().unwrap();
     }
 
-    fn print_lines_styled(&mut self, lines: impl IntoIterator<Item = Vec<StyledString>>) {
+    fn print_lines_styled<'a, StyledValues>(
+        &mut self,
+        lines: impl IntoIterator<Item = StyledValues>,
+    ) where
+        StyledValues: IntoIterator<Item = StyledString<'a>>,
+    {
         for line in lines {
             for word in line {
                 self.stdout.queue(PrintStyledContent(word.into())).unwrap();
@@ -66,42 +80,71 @@ impl CliWriterRepository for CrosstermCliWriter {
         self.stdout.flush().unwrap();
     }
 
-    fn print_animation_single_line_styled<
-        Sprites: IntoIterator<Item = Vec<StyledString>> + Sized + Clone,
-    >(
-        &mut self,
-        sprites: Sprites,
-        interval: Duration,
-        mut finisher: oneshot::Receiver<()>,
-    ) where
-        <Sprites as IntoIterator>::IntoIter: Clone,
-    {
-        self.stdout.execute(SavePosition).unwrap();
+    fn print_centered_text_with_border(&mut self, text: &str, border_char: char) {
+        let (col, rows) = crossterm::terminal::size().unwrap();
+        let w = crossterm::terminal::window_size().unwrap();
+        let w_col = w.columns;
+        let w_r = w.rows;
 
-        for sprites_line in sprites.into_iter().cycle() {
-            sprites_line.into_iter().for_each(|sprite| {
-                self.stdout
-                    .queue(PrintStyledContent(sprite.into()))
-                    .unwrap();
-            });
+        println!("o coisa {col} {rows}");
+        println!("o coisa {w_col} {w_r}");
 
-            self.stdout.flush().unwrap();
+        let das = crossterm::terminal::window_size().unwrap();
+        let rows = das.rows;
 
-            std::thread::sleep(interval);
+        let size_border = ((rows / 2) - ((text.len() as u16) / 2))
+            .checked_sub(1)
+            .unwrap();
 
-            self.stdout
-                .queue(RestorePosition)
-                .unwrap()
-                .queue(Clear(ClearType::CurrentLine))
-                .unwrap();
+        (0..size_border).into_iter().for_each(|_| {
+            self.stdout.execute(Print(border_char)).unwrap();
+        });
 
-            self.stdout.flush().unwrap();
+        self.stdout.execute(Print(text)).unwrap();
 
-            if finisher.try_recv().is_ok() {
-                break;
-            }
-        }
+        (0..size_border).into_iter().for_each(|_| {
+            self.stdout.execute(Print(border_char)).unwrap();
+        });
+
+        self.stdout.flush().unwrap();
     }
+
+    // fn print_animation_single_line_styled<
+    //     Sprites: IntoIterator<Item = Vec<'static>> + Sized + Clone,
+    // >(
+    //     &mut self,
+    //     sprites: Sprites,
+    //     interval: Duration,
+    //     mut finisher: oneshot::Receiver<()>,
+    // ) where
+    //     <Sprites as IntoIterator>::IntoIter: Clone,
+    // {
+    //     self.stdout.execute(SavePosition).unwrap();
+    //
+    //     for sprites_line in sprites.into_iter().cycle() {
+    //         sprites_line.into_iter().for_each(|sprite| {
+    //             self.stdout
+    //                 .queue(PrintStyledContent(sprite.into()))
+    //                 .unwrap();
+    //         });
+    //
+    //         self.stdout.flush().unwrap();
+    //
+    //         std::thread::sleep(interval);
+    //
+    //         self.stdout
+    //             .queue(RestorePosition)
+    //             .unwrap()
+    //             .queue(Clear(ClearType::CurrentLine))
+    //             .unwrap();
+    //
+    //         self.stdout.flush().unwrap();
+    //
+    //         if finisher.try_recv().is_ok() {
+    //             break;
+    //         }
+    //     }
+    // }
 
     fn print_animation_single_line<T: Display, Sprites: IntoIterator<Item = T> + Sized + Clone>(
         &mut self,

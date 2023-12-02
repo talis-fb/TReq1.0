@@ -2,6 +2,7 @@ use async_trait::async_trait;
 
 use crate::app::provider::Provider;
 use crate::app::services::request::entity::RequestData;
+use crate::app::services::web_client::entity::get_status_code_message;
 use crate::utils::observable::observable;
 use crate::view::cli::writer::CliWriterRepository;
 use crate::view::commands::AppCommandExecutor;
@@ -23,11 +24,48 @@ where
     W: CliWriterRepository + Send,
 {
     async fn execute(&mut self, mut provider: Box<dyn Provider + Send>) -> anyhow::Result<()> {
-        self.writer_stderr.print_lines_styled([Vec::from([
-            StyledString::from(self.req.method.to_string()).with_text_style(TextStyle::Bold),
-            StyledString::from(" "),
-            StyledString::from(self.req.url.clone()).with_color_text(Color::Blue),
-        ])]);
+        const BREAK_LINE: &str = "----------------------------------------";
+        const BREAK_LINE_WITH_GAP: &str = "  ------------------------------------";
+
+        const TAB_SPACE: &str = "  ";
+        const SINGLE_SPACE: &str = " ";
+
+        let tab_space_styled = StyledString::from(TAB_SPACE);
+        let single_space_styled = StyledString::from(SINGLE_SPACE);
+
+        let title = {
+            let method =
+                StyledString::from(self.req.method.as_str()).with_text_style(TextStyle::Bold);
+            let url = StyledString::from(self.req.url.as_str()).with_color_text(Color::Blue);
+
+            [
+                tab_space_styled.clone(),
+                method,
+                single_space_styled.clone(),
+                url,
+            ]
+        };
+
+        let headers: Vec<[StyledString; 5]> = {
+            self.req
+                .headers
+                .iter()
+                .map(|(k, v)| {
+                    [
+                        tab_space_styled.clone(),
+                        StyledString::from("| "),
+                        StyledString::from(k),
+                        StyledString::from(":"),
+                        StyledString::from(v),
+                    ]
+                })
+                .collect()
+        };
+
+        self.writer_stderr.print_lines([BREAK_LINE]);
+        self.writer_stderr.print_lines_styled([title]);
+        self.writer_stderr.print_lines_styled(headers);
+        self.writer_stderr.print_lines([BREAK_LINE]);
 
         let request_to_do = std::mem::take(&mut self.req);
         let id = provider.add_request(request_to_do).await?;
@@ -55,37 +93,49 @@ where
         let response_to_show = response_submit.await?;
 
         if let Err(err_message) = response_to_show {
-            self.writer_stderr.print_lines_styled([
-                Vec::from([
-                    "-------------- ".into(),
-                    StyledString::from("ERROR").with_color_text(Color::Red),
-                    " -------------------".into(),
-                ]),
-                create_vec_styled_string_from([err_message]),
-                create_vec_styled_string_from(["----------------------------------------"]),
-            ]);
+            self.writer_stderr.print_lines_styled([[
+                tab_space_styled.clone(),
+                StyledString::from("Error Requesting...").with_color_text(Color::Red),
+            ]]);
+
+            self.writer_stderr.print_lines([err_message]);
+            self.writer_stderr.print_lines([BREAK_LINE]);
 
             return Ok(());
         }
 
         let response = response_to_show.unwrap();
+        let response_status = response.status.to_string();
 
+        let response_status_message = get_status_code_message(response.status);
+        let response_status_message_styled = format!(" ({response_status_message})");
 
-        self.writer_stderr.print_lines_styled([
-            create_vec_styled_string_from(["----------------------------------------"]),
-            Vec::from([
-                StyledString::from(" STATUS: "),
-                StyledString::from(response.status.to_string()).with_color_text({
-                    match response.status {
-                        0..=299 => Color::Blue,
-                        300..=499 => Color::Yellow,
-                        500..=1000 => Color::Red,
-                        _ => Color::Red,
-                    }
-                }),
-            ]),
-            create_vec_styled_string_from(["----------------------------------------"]),
-        ]);
+        let title_status = [
+            tab_space_styled.clone(),
+            StyledString::from("STATUS: ").with_text_style(TextStyle::Bold),
+            StyledString::from(&response_status),
+            StyledString::from(&response_status_message_styled),
+        ];
+        let headers: Vec<[StyledString; 5]> = {
+            response
+                .headers
+                .iter()
+                .map(|(k, v)| {
+                    [
+                        tab_space_styled.clone(),
+                        StyledString::from("| "),
+                        StyledString::from(k),
+                        StyledString::from(":"),
+                        StyledString::from(v),
+                    ]
+                })
+                .collect()
+        };
+
+        self.writer_stderr.print_lines_styled([title_status]);
+        self.writer_stderr.print_lines([BREAK_LINE_WITH_GAP]);
+        self.writer_stderr.print_lines_styled(headers);
+        self.writer_stderr.print_lines([BREAK_LINE_WITH_GAP]);
 
         self.writer_stdout.print_lines([response.body]);
 
