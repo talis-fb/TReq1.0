@@ -8,7 +8,7 @@ use crossterm::{ExecutableCommand, QueueableCommand};
 use tokio::sync::oneshot;
 use tokio::time::Duration;
 
-use crate::view::style::StyledString;
+use crate::view::style::StyledStr;
 
 pub trait CliWriterRepository {
     fn clear_current_line(&mut self);
@@ -31,7 +31,7 @@ pub trait CliWriterRepository {
         &mut self,
         lines: impl IntoIterator<Item = StyledValues>,
     ) where
-        StyledValues: IntoIterator<Item = StyledString<'a>>;
+        StyledValues: IntoIterator<Item = StyledStr<'a>>;
 
     // fn print_animation_single_line_styled<
     //     Sprites: IntoIterator<Item = Vec<StyledString<'static>>> + Sized + Clone,
@@ -69,7 +69,7 @@ impl CliWriterRepository for CrosstermCliWriter {
         &mut self,
         lines: impl IntoIterator<Item = StyledValues>,
     ) where
-        StyledValues: IntoIterator<Item = StyledString<'a>>,
+        StyledValues: IntoIterator<Item = StyledStr<'a>>,
     {
         for line in lines {
             for word in line {

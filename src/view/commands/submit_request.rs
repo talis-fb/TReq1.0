@@ -3,10 +3,12 @@ use async_trait::async_trait;
 use crate::app::provider::Provider;
 use crate::app::services::request::entity::RequestData;
 use crate::app::services::web_client::entity::get_status_code_message;
-use crate::utils::observable::observable;
+use crate::utils::observable::chain_listener_to_receiver;
 use crate::view::cli::writer::CliWriterRepository;
 use crate::view::commands::AppCommandExecutor;
-use crate::view::style::{create_vec_styled_string_from, Color, StyledString, TextStyle};
+use crate::view::style::{create_vec_styled_string_from, Color, StyledStr, TextStyle};
+
+use indicatif::{HumanDuration, MultiProgress, ProgressBar, ProgressStyle, ProgressState};
 
 #[derive(Debug)]
 pub struct BasicRequestExecutor<Writer>
@@ -30,13 +32,13 @@ where
         const TAB_SPACE: &str = "  ";
         const SINGLE_SPACE: &str = " ";
 
-        let tab_space_styled = StyledString::from(TAB_SPACE);
-        let single_space_styled = StyledString::from(SINGLE_SPACE);
+        let tab_space_styled = StyledStr::from(TAB_SPACE);
+        let single_space_styled = StyledStr::from(SINGLE_SPACE);
 
         let title = {
             let method =
-                StyledString::from(self.req.method.as_str()).with_text_style(TextStyle::Bold);
-            let url = StyledString::from(self.req.url.as_str()).with_color_text(Color::Blue);
+                StyledStr::from(self.req.method.as_str()).with_text_style(TextStyle::Bold);
+            let url = StyledStr::from(self.req.url.as_str()).with_color_text(Color::Blue);
 
             [
                 tab_space_styled.clone(),
@@ -46,17 +48,17 @@ where
             ]
         };
 
-        let headers: Vec<[StyledString; 5]> = {
+        let headers: Vec<[StyledStr; 5]> = {
             self.req
                 .headers
                 .iter()
                 .map(|(k, v)| {
                     [
                         tab_space_styled.clone(),
-                        StyledString::from("| "),
-                        StyledString::from(k),
-                        StyledString::from(":"),
-                        StyledString::from(v),
+                        StyledStr::from("| "),
+                        StyledStr::from(k),
+                        StyledStr::from(":"),
+                        StyledStr::from(v),
                     ]
                 })
                 .collect()
@@ -71,31 +73,31 @@ where
         let id = provider.add_request(request_to_do).await?;
 
         let response_submit = provider.submit_request_async(id).await?;
-        let (response_submit, notify_submit) = observable(response_submit);
+        let (response_submit, mut listener_submit) = chain_listener_to_receiver(response_submit);
 
-        let loading_sprites = [
-            "⣾ Loading.",
-            "⣽ Loading.",
-            "⣻ Loading..",
-            "⢿ Loading..",
-            "⡿ Loading..",
-            "⣟ Loading...",
-            "⣯ Loading...",
-            "⣷ Loading...",
-        ];
+        // Loading spinner
+        {
+            let pb = ProgressBar::new(100);
+            pb.set_style(ProgressStyle::with_template("{spinner:.green} {msg}").unwrap());
+            pb.set_message("Loading...");
 
-        self.writer_stderr.print_animation_single_line(
-            loading_sprites,
-            std::time::Duration::from_millis(300),
-            notify_submit,
-        );
+            let mut intv = tokio::time::interval(std::time::Duration::from_millis(14));
+            loop {
+                if listener_submit.try_recv().is_ok() {
+                    break;
+                }
+                intv.tick().await;
+                pb.inc(1);
+            }
+            pb.finish_and_clear();
+        }
 
         let response_to_show = response_submit.await?;
 
         if let Err(err_message) = response_to_show {
             self.writer_stderr.print_lines_styled([[
                 tab_space_styled.clone(),
-                StyledString::from("Error Requesting...").with_color_text(Color::Red),
+                StyledStr::from("Error Requesting...").with_color_text(Color::Red),
             ]]);
 
             self.writer_stderr.print_lines([err_message]);
@@ -112,21 +114,21 @@ where
 
         let title_status = [
             tab_space_styled.clone(),
-            StyledString::from("STATUS: ").with_text_style(TextStyle::Bold),
-            StyledString::from(&response_status),
-            StyledString::from(&response_status_message_styled),
+            StyledStr::from("STATUS: ").with_text_style(TextStyle::Bold),
+            StyledStr::from(&response_status),
+            StyledStr::from(&response_status_message_styled),
         ];
-        let headers: Vec<[StyledString; 5]> = {
+        let headers: Vec<[StyledStr; 5]> = {
             response
                 .headers
                 .iter()
                 .map(|(k, v)| {
                     [
                         tab_space_styled.clone(),
-                        StyledString::from("| "),
-                        StyledString::from(k),
-                        StyledString::from(":"),
-                        StyledString::from(v),
+                        StyledStr::from("| "),
+                        StyledStr::from(k),
+                        StyledStr::from(":"),
+                        StyledStr::from(v),
                     ]
                 })
                 .collect()

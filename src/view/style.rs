@@ -40,14 +40,14 @@ impl From<Color> for ColorCrossterm {
 // Styled Structs to manipulate
 // ----------------
 #[derive(Clone, Default)]
-pub struct StyledString<'a> {
+pub struct StyledStr<'a> {
     pub value: &'a str,
     color_text: Option<Color>,
     color_bg: Option<Color>,
     style_text: Option<TextStyle>,
 }
 
-impl StyledString<'_> {
+impl StyledStr<'_> {
     pub fn with_color_text(mut self, color: Color) -> Self {
         self.color_text = Some(color);
         self
@@ -63,13 +63,13 @@ impl StyledString<'_> {
     }
 }
 
-impl From<StyledString<'_>> for String {
-    fn from(val: StyledString) -> Self {
+impl From<StyledStr<'_>> for String {
+    fn from(val: StyledStr) -> Self {
         val.value.to_string()
     }
 }
 
-impl<'a> From<&'a str> for StyledString<'a> {
+impl<'a> From<&'a str> for StyledStr<'a> {
     fn from(value: &'a str) -> Self {
         Self {
             value,
@@ -80,7 +80,7 @@ impl<'a> From<&'a str> for StyledString<'a> {
     }
 }
 
-impl<'a> From<&'a String> for StyledString<'a> {
+impl<'a> From<&'a String> for StyledStr<'a> {
     fn from(value: &'a String) -> Self {
         Self {
             value,
@@ -97,8 +97,8 @@ impl<'a> From<&'a String> for StyledString<'a> {
 
 use crossterm::style::{ContentStyle, StyledContent, Stylize};
 
-impl From<StyledString<'_>> for StyledContent<String> {
-    fn from(val: StyledString) -> Self {
+impl From<StyledStr<'_>> for StyledContent<String> {
+    fn from(val: StyledStr) -> Self {
         let mut style_text = StyledContent::new(ContentStyle::default(), val.value.to_string());
 
         if let Some(color) = val.color_text {
@@ -122,6 +122,6 @@ impl From<StyledString<'_>> for StyledContent<String> {
 // ------------------
 pub fn create_vec_styled_string_from<'a>(
     values: impl IntoIterator<Item = &'a str>,
-) -> Vec<StyledString<'a>> {
-    values.into_iter().map(StyledString::from).collect()
+) -> Vec<StyledStr<'a>> {
+    values.into_iter().map(StyledStr::from).collect()
 }
