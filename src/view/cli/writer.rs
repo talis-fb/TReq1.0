@@ -25,23 +25,11 @@ pub trait CliWriterRepository {
 
     fn print_centered_text_with_border(&mut self, text: &str, border_char: char);
 
-    // fn print_lines_styled<'a>(&mut self, lines: impl IntoIterator<Item = Vec<StyledString<'a>>>);
-
     fn print_lines_styled<'a, StyledValues>(
         &mut self,
         lines: impl IntoIterator<Item = StyledValues>,
     ) where
         StyledValues: IntoIterator<Item = StyledStr<'a>>;
-
-    // fn print_animation_single_line_styled<
-    //     Sprites: IntoIterator<Item = Vec<StyledString<'static>>> + Sized + Clone,
-    // >(
-    //     &mut self,
-    //     sprites: Sprites,
-    //     interval: Duration,
-    //     finisher: oneshot::Receiver<()>,
-    // ) where
-    //     <Sprites as IntoIterator>::IntoIter: Clone;
 }
 
 pub struct CrosstermCliWriter {
@@ -96,55 +84,18 @@ impl CliWriterRepository for CrosstermCliWriter {
             .checked_sub(1)
             .unwrap();
 
-        (0..size_border).into_iter().for_each(|_| {
+        for _ in 0..size_border {
             self.stdout.execute(Print(border_char)).unwrap();
-        });
+        }
 
         self.stdout.execute(Print(text)).unwrap();
 
-        (0..size_border).into_iter().for_each(|_| {
+        for _ in 0..size_border {
             self.stdout.execute(Print(border_char)).unwrap();
-        });
+        }
 
         self.stdout.flush().unwrap();
     }
-
-    // fn print_animation_single_line_styled<
-    //     Sprites: IntoIterator<Item = Vec<'static>> + Sized + Clone,
-    // >(
-    //     &mut self,
-    //     sprites: Sprites,
-    //     interval: Duration,
-    //     mut finisher: oneshot::Receiver<()>,
-    // ) where
-    //     <Sprites as IntoIterator>::IntoIter: Clone,
-    // {
-    //     self.stdout.execute(SavePosition).unwrap();
-    //
-    //     for sprites_line in sprites.into_iter().cycle() {
-    //         sprites_line.into_iter().for_each(|sprite| {
-    //             self.stdout
-    //                 .queue(PrintStyledContent(sprite.into()))
-    //                 .unwrap();
-    //         });
-    //
-    //         self.stdout.flush().unwrap();
-    //
-    //         std::thread::sleep(interval);
-    //
-    //         self.stdout
-    //             .queue(RestorePosition)
-    //             .unwrap()
-    //             .queue(Clear(ClearType::CurrentLine))
-    //             .unwrap();
-    //
-    //         self.stdout.flush().unwrap();
-    //
-    //         if finisher.try_recv().is_ok() {
-    //             break;
-    //         }
-    //     }
-    // }
 
     fn print_animation_single_line<T: Display, Sprites: IntoIterator<Item = T> + Sized + Clone>(
         &mut self,
